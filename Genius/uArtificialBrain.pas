@@ -25,6 +25,7 @@ type
 
     function Contact(Dst:TNeuron):Boolean;
     procedure Signal(s:Single);
+    procedure Fire(pain: Boolean);
   end;
 
   TFiredNeuron = record
@@ -100,6 +101,21 @@ begin
       Result := True;
       Exit;
     end;
+  end;
+end;
+
+procedure TNeuron.Fire(pain: Boolean);
+var
+  i: Integer;
+  s: TSynapse;
+begin
+  for i := 0 to 3 do
+  begin
+    s := Synapses[i];
+    if not Assigned(s) then
+      Exit;
+
+    s.Fired(Self, pain);
   end;
 end;
 
