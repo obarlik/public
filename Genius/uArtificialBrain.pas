@@ -18,7 +18,7 @@ type
 
   TNeuron = class
     Brain: TBrain;
-    Synapses: TArray<TSynapse>;
+    Synapses: array[0..3]of TSynapse;
     Value: Single;
     LastImpulse: TDateTime;
     Firing: Boolean;
@@ -73,30 +73,33 @@ var
 begin
   Result := False;
 
-  for s in Synapses do
+  for i := 0 to 3 do
   begin
+    s := Synapses[i];
+
+    if not Assigned(s) then
+    begin
+      s := TSynapse.Create;
+      try
+        s.NeuronA := Self;
+        s.NeuronB := Dst;
+        SetLength(Synapses, i+1);
+        Synapses[i] := s;
+        Result := True;
+        Dst.Contact(Self);
+        Exit;
+      except
+        s.Free;
+        raise;
+      end;
+    end;
+
     if ((s.NeuronA = Dst)
      or (s.NeuronB = Dst)) then
     begin
       Result := True;
       Exit;
     end;
-  end;
-
-  i := Length(Synapses);
-  if i>=4 then
-    Exit;
-
-  s := TSynapse.Create;
-  try
-    s.NeuronA := Self;
-    s.NeuronB := Dst;
-    SetLength(Synapses, i+1);
-    Synapses[i] := s;
-    Result := True;
-  except
-    s.Free;
-    raise;
   end;
 end;
 
