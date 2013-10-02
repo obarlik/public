@@ -105,12 +105,16 @@ begin
   LastImpulse := Now;
   t := Trunc((LastImpulse - t)*24*3600*1000);
 
-  if t>0 then
-    Value := Value * Power(0.5, t);
+  Value := Value * Power(0.5, t);
 
   if Firing then
-    Firing := Abs(Value)>=0.05
-  else
+  begin
+    Firing := Abs(Value)>=0.05;
+    if not Firing then
+      Value := 0;
+  end;
+
+  if not Firing then
   begin
     Value := Value + s;
     if Abs(Value)>0.25 then
