@@ -2,6 +2,8 @@ unit uArtificialBrain;
 
 interface
 
+uses Contnrs, System.Generics.Collections;
+
 type
   TNeuron = class;
 
@@ -19,9 +21,15 @@ type
     Synapses: array[0..3]of TSynapse;
 
     function Contact(Dst:TNeuron):Boolean;
+    procedure Signal(value:Single);
+  end;
+
+  TSignal = class
+
   end;
 
   TBrain = class
+    Signals: TThreadedQueue<TSignal>;
 
   end;
 
@@ -82,6 +90,14 @@ begin
   end;
 end;
 
+procedure TNeuron.Signal(value: Single);
+var
+  s: TSignal;
+begin
+  s := TSignal.Create;
+  //s.
 
+  //Brain.Signals.PushItem(
+end;
 
 end.
