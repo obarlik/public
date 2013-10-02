@@ -10,6 +10,6 @@ uses
 begin
   Application.Initialize;
   Application.MainFormOnTaskbar := True;
-  AApplication.CreateForm(TfrmMain, frmMain);
-  pplication.Run;
+  Application.CreateForm(TfrmMain, frmMain);
+  Application.Run;
 end.
