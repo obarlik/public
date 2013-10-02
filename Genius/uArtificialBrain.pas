@@ -2,7 +2,7 @@ unit uArtificialBrain;
 
 interface
 
-uses Contnrs, System.Generics.Collections;
+uses Contnrs, System.Generics.Collections, System.SysUtils;
 
 type
   TNeuron = class;
@@ -18,22 +18,28 @@ type
 
   TNeuron = class
     Brain: TBrain;
-    Synapses: array[0..3]of TSynapse;
+    Synapses: TArray<TSynapse>;
+    Value: Single;
+    LastImpulse: TDateTime;
+    Firing: Boolean;
 
     function Contact(Dst:TNeuron):Boolean;
-    procedure Signal(value:Single);
+    procedure Signal(s:Single);
   end;
 
-  TSignal = class
-
+  TFiredNeuron = record
+    Neuron: TNeuron;
+    Pain: Boolean;
   end;
 
   TBrain = class
-    Signals: TThreadedQueue<TSignal>;
+    FiredNeurons: TThreadedQueue<TFiredNeuron>;
 
   end;
 
 implementation
+
+uses System.Math;
 
 { TSynapse }
 
@@ -63,24 +69,9 @@ var
   s: TSynapse;
 begin
   Result := False;
-  for i := 0 to 3 do
-  begin
-    s := Synapses[i];
 
-    if not Assigned(s) then
-    begin
-      s := TSynapse.Create;
-      try
-        s.NeuronA := Self;
-        s.NeuronB := Dst;
-        Synapses[i] := s;
-        Result := True;
-      except
-        s.Free;
-        raise;
-      end;
-    end
-    else
+  for s in Synapses do
+  begin
     if ((s.NeuronA = Dst)
      or (s.NeuronB = Dst)) then
     begin
@@ -88,16 +79,47 @@ begin
       Exit;
     end;
   end;
+
+  i := Length(Synapses);
+  if i>=4 then
+    Exit;
+
+  s := TSynapse.Create;
+  try
+    s.NeuronA := Self;
+    s.NeuronB := Dst;
+    SetLength(Synapses, i+1);
+    Synapses[i] := s;
+    Result := True;
+  except
+    s.Free;
+    raise;
+  end;
 end;
 
-procedure TNeuron.Signal(value: Single);
+procedure TNeuron.Signal(s: Single);
 var
-  s: TSignal;
+  t : TDateTime;
 begin
-  s := TSignal.Create;
-  //s.
+  t := LastImpulse;
+  LastImpulse := Now;
+  t := Trunc((LastImpulse - t)*24*3600*1000);
 
-  //Brain.Signals.PushItem(
+  if t>0 then
+    Value := Value * Power(0.5, t);
+
+  if Firing then
+    Firing := Abs(Value)>=0.05
+  else
+  begin
+    Value := Value + s;
+    if Abs(Value)>0.25 then
+    begin
+      Value := 1;
+      Firing := True;
+      Brain.NeuronFired(Self, Value>0);
+    end;
+  end;
 end;
 
 end.
