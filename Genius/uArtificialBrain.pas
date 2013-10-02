@@ -30,11 +30,14 @@ type
   TFiredNeuron = record
     Neuron: TNeuron;
     Pain: Boolean;
+
+    constructor Create(_neuron:TNeuron; _pain:Boolean);
   end;
 
   TBrain = class
     FiredNeurons: TThreadedQueue<TFiredNeuron>;
 
+    procedure NeuronFired(neuron:TNeuron; pain:Boolean);
   end;
 
 implementation
@@ -124,6 +127,21 @@ begin
       Brain.NeuronFired(Self, Value>0);
     end;
   end;
+end;
+
+{ TBrain }
+
+procedure TBrain.NeuronFired(neuron: TNeuron; pain: Boolean);
+begin
+  FiredNeurons.PushItem(TFiredNeuron.Create(neuron, pain));
+end;
+
+{ TFiredNeuron }
+
+constructor TFiredNeuron.Create(_neuron: TNeuron; _pain: Boolean);
+begin
+  Neuron := _neuron;
+  Pain := _pain;
 end;
 
 end.
