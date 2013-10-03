@@ -2,26 +2,30 @@ unit uArtificialBrain;
 
 interface
 
-uses Contnrs, System.Generics.Collections, System.SysUtils;
+uses Windows, System.Contnrs, System.Generics.Collections, System.SysUtils;
 
 type
   TNeuron = class;
 
   TSynapse = class
+    constructor Create(_neuronA, _neuronB: TNeuron);
+  public
     NeuronA, NeuronB: TNeuron;
     Weight: single;
 
     procedure Transfer(Src: TNeuron; Pain: Boolean);
-    procedure Learn(v:Integer);
+    procedure Learn(v: Integer);
   end;
 
   TBrain = class;
 
   TNeuron = class
+    constructor Create(_brain: TBrain);
+  public
     Brain: TBrain;
     Synapses: array [0 .. 3] of TSynapse;
     Value: single;
-    LastImpulse: TDateTime;
+    LastImpulse: Int32;
     Firing: Boolean;
 
     function Contact(Dst: TNeuron): Boolean;
@@ -48,12 +52,19 @@ uses System.Math;
 
 { TSynapse }
 
+constructor TSynapse.Create(_neuronA, _neuronB: TNeuron);
+begin
+  inherited Create;
+  NeuronA := _neuronA;
+  NeuronB := _neuronB;
+  Weight := 0.1;
+end;
+
 procedure TSynapse.Learn(v: Integer);
 begin
-  if v>0 then
-    Weight := Weight + (1-Weight)*0.0001
-  else
-  if v<0 then
+  if v > 0 then
+    Weight := Weight + (1 - Weight) * 0.0001
+  else if v < 0 then
     Weight := Weight * 0.9999;
 end;
 
@@ -90,18 +101,10 @@ begin
 
     if not Assigned(s) then
     begin
-      s := TSynapse.Create;
-      try
-        s.NeuronA := Self;
-        s.NeuronB := Dst;
-        Synapses[i] := s;
-        Result := True;
-        Dst.Contact(Self);
-        Exit;
-      except
-        s.Free;
-        raise;
-      end;
+      Synapses[i] := TSynapse.Create(Self, Dst);
+      Dst.Contact(Self);
+      Result := True;
+      Exit;
     end;
 
     if ((s.NeuronA = Dst) or (s.NeuronB = Dst)) then
@@ -110,6 +113,12 @@ begin
       Exit;
     end;
   end;
+end;
+
+constructor TNeuron.Create(_brain: TBrain);
+begin
+  inherited Create;
+  Brain := _brain;
 end;
 
 procedure TNeuron.Fire(Pain: Boolean);
@@ -129,11 +138,11 @@ end;
 
 procedure TNeuron.Signal(synapse: TSynapse; s: single);
 var
-  t: TDateTime;
+  t: Int32;
 begin
   t := LastImpulse;
-  LastImpulse := Now;
-  t := Trunc((LastImpulse - t) * 24 * 3600 * 1000);
+  LastImpulse := GetTickCount;
+  t := Abs(LastImpulse - t);
 
   Value := Value * Power(0.5, t);
 
@@ -151,7 +160,7 @@ begin
     Value := Value + s;
     if Abs(Value) > 0.25 then
     begin
-      if Value>0 then
+      if Value > 0 then
         Value := 1
       else
         Value := -1;
