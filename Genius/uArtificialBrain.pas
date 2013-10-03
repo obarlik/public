@@ -140,7 +140,9 @@ begin
   if Firing then
   begin
     Firing := Abs(Value) >= 0.05;
-    if not Firing then
+    if Firing then
+      synapse.Learn(Sign(Value) * Sign(s))
+    else
       Value := 0;
   end;
 
@@ -157,9 +159,6 @@ begin
       Brain.NeuronFired(Self, Value > 0);
     end;
   end;
-
-  if Firing then
-    synapse.Learn(Sign(Value) * Sign(s))
 end;
 
 { TBrain }
