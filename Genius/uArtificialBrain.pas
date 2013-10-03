@@ -11,7 +11,7 @@ type
     NeuronA, NeuronB: TNeuron;
     Weight: single;
 
-    procedure Fired(Src:TNeuron; Pain:Boolean);
+    procedure Transfer(Src:TNeuron; Pain:Boolean);
   end;
 
   TBrain = class;
@@ -29,10 +29,11 @@ type
   end;
 
   TFiredNeuron = record
+    Synapse: TSynapse;
     Neuron: TNeuron;
     Pain: Boolean;
 
-    constructor Create(_neuron:TNeuron; _pain:Boolean);
+    constructor Create(_synapse: TSynapse; _neuron:TNeuron; _pain:Boolean);
   end;
 
   TBrain = class
@@ -47,7 +48,7 @@ uses System.Math;
 
 { TSynapse }
 
-procedure TSynapse.Fired(Src: TNeuron; Pain:Boolean);
+procedure TSynapse.Transfer(Src: TNeuron; Pain: Boolean);
 var
   Dst: TNeuron;
   s: Single;
@@ -64,6 +65,7 @@ begin
 
   Dst.Signal(s);
 end;
+
 
 { TNeuron }
 
@@ -84,7 +86,6 @@ begin
       try
         s.NeuronA := Self;
         s.NeuronB := Dst;
-        SetLength(Synapses, i+1);
         Synapses[i] := s;
         Result := True;
         Dst.Contact(Self);
@@ -115,7 +116,7 @@ begin
     if not Assigned(s) then
       Exit;
 
-    s.Fired(Self, pain);
+    s.Transfer(Self, pain);
   end;
 end;
 
@@ -157,8 +158,9 @@ end;
 
 { TFiredNeuron }
 
-constructor TFiredNeuron.Create(_neuron: TNeuron; _pain: Boolean);
+constructor TFiredNeuron.Create(_synapse: TSynapse; _neuron: TNeuron; _pain: Boolean);
 begin
+  Synapse := _synapse;
   Neuron := _neuron;
   Pain := _pain;
 end;
