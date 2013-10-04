@@ -55,19 +55,25 @@ type
     FireLock: TObject;
     ProcessLock: TObject;
     FiredNeurons: TQueue<TFiredNeuron>;
+    FNeurons: TObjectList<TNeuron>;
     FTicks: Integer;
     FStopping: Boolean;
     FProcessThreadCount: Integer;
+    FMeshSize: TSize;
 
     function GetTicks: Integer;
+    function GetNeuron(x, y: Integer): TNeuron;
   public
     procedure PushFiredNeuron(Neuron: TNeuron; Pain: Boolean);
     function PopFiredNeuron(var fn:TFiredNeuron):Boolean;
     procedure StartProcessing;
     procedure StopProcessing;
+    procedure BuildNetwork(m, n: integer);
 
     property Ticks: Integer read GetTicks;
     property Stopping: Boolean read FStopping;
+    property Neuron[x, y: Integer]: TNeuron read GetNeuron;
+    property MeshSize: TSize read FMeshSize;
   end;
 
 implementation
@@ -218,6 +224,7 @@ end;
 
 destructor TNeuron.Destroy;
 begin
+  ClearSynapses;
   inherited;
 end;
 
@@ -226,8 +233,7 @@ var
   i: Integer;
 begin
   for i := 0 to 3 do
-    if Assigned(Synapses[i]) then
-      Synapses[i].Detach;
+    FreeAndNil(Synapses[i]);
 end;
 
 procedure TNeuron.Fire(Pain: Boolean);
@@ -300,12 +306,47 @@ end;
 
 { TBrain }
 
+procedure TBrain.BuildNetwork(m, n: integer);
+var
+  x, y: Integer;
+  t: TNeuron;
+begin
+  if (m<=0) or (n<=0) then
+    raise Exception.Create('Invalid mesh size for network!');
+
+  FNeurons.Clear;
+  FMeshSize.cx := m;
+  FMeshSize.cy := n;
+
+  for y := 0 to n-1 do
+  begin
+    for x := 0 to m-1 do
+    begin
+      t := TNeuron.Create(Self);
+
+      FNeurons.Add(t);
+
+      if y>0 then
+        t.Contact(Neuron[x, y-1]);
+
+      if x>0 then
+        t.Contact(Neuron[x-1, y]);
+
+      if y=(n-1) then
+        t.Contact(Neuron[x, 0]);
+    end;
+
+    t.Contact(Neuron[0, y]);
+  end;
+end;
+
 constructor TBrain.Create;
 begin
   inherited Create;
   FireLock := TObject.Create;
   ProcessLock := TObject.Create;
   FiredNeurons := TQueue<TFiredNeuron>.Create;
+  FNeurons := TObjectList<TNeuron>.Create;
 end;
 
 destructor TBrain.Destroy;
@@ -314,7 +355,20 @@ begin
   FreeAndNil(FireLock);
   FreeAndNil(ProcessLock);
   FreeAndNil(FiredNeurons);
+  FNeurons.Free;
   inherited;
+end;
+
+function TBrain.GetNeuron(x, y: Integer): TNeuron;
+begin
+  with MeshSize do
+  begin
+    if (x<0) or (x>=cx)
+    or (y<0) or (y>=cy) then
+      raise Exception.Create('Invalid neuron coordinate!');
+
+    Result := FNeurons[y*cx + x];
+  end;
 end;
 
 function TBrain.GetTicks: Int32;
