@@ -3,7 +3,7 @@ unit uArtificialBrain;
 interface
 
 uses Windows, System.Contnrs, System.Generics.Collections, System.SysUtils,
-     System.Classes;
+     System.Classes, System.SyncObjs;
 
 type
   TNeuron = class;
@@ -41,32 +41,26 @@ type
     constructor Create(_neuron: TNeuron; _pain: Boolean);
   end;
 
-  TBrainClock = class
-  private
-    FTicks: Int32;
-    function GetTicks: Int32;
-  public
-    property Ticks:Int32 read GetTicks;
-  end;
-
   TBrain = class
     constructor Create;
     destructor Destroy; override;
 
   private
-    FiredNeurons: TThreadedQueue<TFiredNeuron>;
-    FBrainClock: TBrainClock;
+    FireLock: TObject;
+    ProcessLock: TObject;
+    FiredNeurons: TQueue<TFiredNeuron>;
+    FTicks: Integer;
     FStopping: Boolean;
     FProcessThreadCount: Integer;
 
-    function GetTicks: Int32;
-
+    function GetTicks: Integer;
   public
-    procedure NeuronFired(Neuron: TNeuron; Pain: Boolean);
+    procedure PushFiredNeuron(Neuron: TNeuron; Pain: Boolean);
+    function PopFiredNeuron(var fn:TFiredNeuron):Boolean;
     procedure Process;
     procedure StopProcessing;
 
-    property Ticks: Int32 read GetTicks;
+    property Ticks: Integer read GetTicks;
     property Stopping: Boolean read FStopping;
   end;
 
@@ -197,7 +191,7 @@ begin
         else
           Value := -1;
         Firing := True;
-        Brain.NeuronFired(Self, Value > 0);
+        Brain.PushFiredNeuron(Self, Value > 0);
       end;
     end;
 
@@ -211,23 +205,49 @@ end;
 constructor TBrain.Create;
 begin
   inherited Create;
-  FBrainClock := TBrainClock.Create;
+  FireLock := TObject.Create;
+  ProcessLock := TObject.Create;
+  FiredNeurons := TQueue<TFiredNeuron>.Create;
 end;
 
 destructor TBrain.Destroy;
 begin
   StopProcessing;
+  FreeAndNil(FireLock);
+  FreeAndNil(ProcessLock);
+  FreeAndNil(FiredNeurons);
   inherited;
 end;
 
 function TBrain.GetTicks: Int32;
 begin
-  Result := FBrainClock.Ticks;
+  Result := AtomicIncrement(FTicks);
 end;
 
-procedure TBrain.NeuronFired(Neuron: TNeuron; Pain: Boolean);
+procedure TBrain.PushFiredNeuron(Neuron: TNeuron; Pain: Boolean);
+var
+  f : TFiredNeuron;
 begin
-  FiredNeurons.PushItem(TFiredNeuron.Create(Neuron, Pain));
+  f := TFiredNeuron.Create(Neuron, Pain);
+  TMonitor.Enter(FireLock);
+  try
+    FiredNeurons.Enqueue(f);
+    TMonitor.Pulse(FireLock);
+  finally
+    TMonitor.Exit(FireLock);
+  end;
+end;
+
+function TBrain.PopFiredNeuron(var fn: TFiredNeuron): Boolean;
+begin
+  TMonitor.Enter(FireLock);
+  try
+    Result := FiredNeurons.Count>0;
+    if Result then
+      fn := FiredNeurons.Dequeue;
+  finally
+    TMonitor.Exit(FireLock);
+  end;
 end;
 
 procedure TBrain.Process;
@@ -242,20 +262,32 @@ begin
       procedure()
       var
         f: TFiredNeuron;
+        ok: Boolean;
       begin
         AtomicIncrement(Self.FProcessThreadCount);
 
         while not Self.Stopping do
         begin
-          while Self.FiredNeurons.QueueSize>0 do
-          begin
-            f := Self.FiredNeurons.PopItem;
-            f.Neuron.Fire(f.Pain);
+          TMonitor.Enter(FireLock);
+          try
+            ok := TMonitor.Wait(FireLock, 100);
+            if ok then
+              Self.PopFiredNeuron(f);
+          finally
+            TMonitor.Exit(FireLock);
           end;
-          Sleep(100);
+
+          if ok then
+            f.Neuron.Fire(f.Pain);
         end;
 
-        AtomicDecrement(Self.FProcessThreadCount);
+        TMonitor.Enter(ProcessLock);
+        try
+          AtomicDecrement(Self.FProcessThreadCount);
+          TMonitor.Pulse(ProcessLock);
+        finally
+          TMonitor.Exit(ProcessLock);
+        end;
       end
     ).Resume;
   end;
@@ -264,8 +296,16 @@ end;
 procedure TBrain.StopProcessing;
 begin
   FStopping := True;
+
   while FProcessThreadCount>0 do
-    Sleep(100);
+  begin
+    TMonitor.Enter(ProcessLock);
+    try
+      TMonitor.Wait(ProcessLock, 100);
+    finally
+      TMonitor.Exit(ProcessLock);
+    end;
+  end;
 end;
 
 { TFiredNeuron }
@@ -276,12 +316,5 @@ begin
   Pain := _pain;
 end;
 
-
-{ TBrainClock }
-
-function TBrainClock.GetTicks: Int32;
-begin
-  Result := AtomicIncrement(FTicks);
-end;
 
 end.
