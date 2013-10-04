@@ -82,10 +82,6 @@
         <DelphiCompile Include="$(MainSource)">
             <MainSource>MainSource</MainSource>
         </DelphiCompile>
-        <DCCReference Include="uMain.pas">
-            <Form>frmMain</Form>
-            <FormType>dfm</FormType>
-        </DCCReference>
         <DCCReference Include="uArtificialBrain.pas"/>
         <BuildConfiguration Include="Release">
             <Key>Cfg_2</Key>

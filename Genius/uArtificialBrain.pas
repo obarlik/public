@@ -10,18 +10,22 @@ type
 
   TSynapse = class
     constructor Create(_neuronA, _neuronB: TNeuron);
+    destructor Destroy;override;
   public
     NeuronA, NeuronB: TNeuron;
     Weight: single;
 
     procedure Transfer(Src: TNeuron; Pain: Boolean);
     procedure Learn(v: Integer);
+    procedure Attach(_neuronA, _neuronB: TNeuron);
+    procedure Detach;
   end;
 
   TBrain = class;
 
   TNeuron = class
     constructor Create(_brain: TBrain);
+    destructor Destroy; override;
   public
     Brain: TBrain;
     Synapses: array [0 .. 3] of TSynapse;
@@ -30,8 +34,10 @@ type
     Firing: Boolean;
 
     function Contact(Dst: TNeuron): Boolean;
+    function IsContacted(Dst: TNeuron):Boolean;
     procedure Signal(synapse: TSynapse; s: single);
     procedure Fire(Pain: Boolean);
+    procedure ClearSynapses;
   end;
 
   TFiredNeuron = record
@@ -57,7 +63,7 @@ type
   public
     procedure PushFiredNeuron(Neuron: TNeuron; Pain: Boolean);
     function PopFiredNeuron(var fn:TFiredNeuron):Boolean;
-    procedure Process;
+    procedure StartProcessing;
     procedure StopProcessing;
 
     property Ticks: Integer read GetTicks;
@@ -70,12 +76,89 @@ uses System.Math;
 
 { TSynapse }
 
+procedure TSynapse.Attach(_neuronA, _neuronB: TNeuron);
+var
+  i: Integer;
+  sa, sb : boolean;
+begin
+  Detach;
+  NeuronA := _neuronA;
+  NeuronB := _neuronB;
+  sa := false;
+  sb := false;
+
+  for i := 0 to 3 do
+  begin
+    if not (sa or (NeuronA.Synapses[i]<>Self)) then
+      sa := True;
+
+    if not (sb or (NeuronB.Synapses[i]<>Self)) then
+      sb := True;
+
+    if sa and sb then
+      Exit;
+  end;
+
+  for i := 0 to 3 do
+  begin
+    if not (sa or Assigned(NeuronA.Synapses[i])) then
+    begin
+      NeuronA.Synapses[i] := Self;
+      sa := True;
+    end;
+
+    if not (sb or Assigned(NeuronB.Synapses[i])) then
+    begin
+      NeuronB.Synapses[i] := Self;
+      sb := True;
+    end;
+
+    if sa and sb then
+      Break;
+  end;
+end;
+
 constructor TSynapse.Create(_neuronA, _neuronB: TNeuron);
 begin
   inherited Create;
-  NeuronA := _neuronA;
-  NeuronB := _neuronB;
   Weight := 0.1;
+  Attach(_neuronA, _neuronB);
+end;
+
+destructor TSynapse.Destroy;
+begin
+  Detach;
+  inherited;
+end;
+
+procedure TSynapse.Detach;
+var
+  i: Integer;
+  sa, sb : boolean;
+begin
+  sa := false;
+  sb := false;
+
+  for i := 0 to 3 do
+  begin
+    if not(sa or (NeuronA.Synapses[i]<>Self)) then
+    begin
+      NeuronA.Synapses[i] := nil;
+      sa := True;
+    end;
+
+    if not(sb or (NeuronB.Synapses[i]<>Self)) then
+    begin
+      NeuronB.Synapses[i] := nil;
+      sb := True;
+    end;
+
+    if sa and sb then
+      Break;
+  end;
+
+  NeuronA := nil;
+  NeuronB := nil;
 end;
 
 procedure TSynapse.Learn(v: Integer);
@@ -114,35 +197,37 @@ end;
 function TNeuron.Contact(Dst: TNeuron): Boolean;
 var
   i: Integer;
-  s: TSynapse;
 begin
-  Result := False;
+  Result := IsContacted(Dst);
 
-  for i := 0 to 3 do
-  begin
-    s := Synapses[i];
-
-    if not Assigned(s) then
-    begin
-      Synapses[i] := TSynapse.Create(Self, Dst);
-      Dst.Contact(Self);
-      Result := True;
-      Exit;
-    end;
-
-    with s do
-    if ((NeuronA = Dst) or (NeuronB = Dst)) then
-    begin
-      Result := True;
-      Exit;
-    end;
-  end;
+  if not Result then
+    for i := 0 to 3 do
+      if not Assigned(Synapses[i]) then
+      begin
+        Synapses[i] := TSynapse.Create(Self, Dst);
+        Result := True;
+        Break;
+      end;
 end;
 
 constructor TNeuron.Create(_brain: TBrain);
 begin
   inherited Create;
   Brain := _brain;
+end;
+
+destructor TNeuron.Destroy;
+begin
+  inherited;
+end;
+
+procedure TNeuron.ClearSynapses;
+var
+  i: Integer;
+begin
+  for i := 0 to 3 do
+    if Assigned(Synapses[i]) then
+      Synapses[i].Detach;
 end;
 
 procedure TNeuron.Fire(Pain: Boolean);
@@ -158,6 +243,19 @@ begin
 
     s.Transfer(Self, Pain);
   end;
+end;
+
+function TNeuron.IsContacted(Dst: TNeuron): Boolean;
+var
+  i: Integer;
+begin
+  for i := 0 to 3 do
+    if Assigned(Synapses[i])
+    and ((Synapses[i].NeuronA = Dst)
+      or (Synapses[i].NeuronB = Dst)) then
+      Exit(True);
+
+  Result := False;
 end;
 
 procedure TNeuron.Signal(synapse: TSynapse; s: single);
@@ -250,7 +348,7 @@ begin
   end;
 end;
 
-procedure TBrain.Process;
+procedure TBrain.StartProcessing;
 var
   i: Integer;
 begin
@@ -270,9 +368,8 @@ begin
         begin
           TMonitor.Enter(FireLock);
           try
-            ok := TMonitor.Wait(FireLock, 100);
-            if ok then
-              Self.PopFiredNeuron(f);
+            ok := TMonitor.Wait(FireLock, 100)
+              and Self.PopFiredNeuron(f);
           finally
             TMonitor.Exit(FireLock);
           end;
@@ -289,7 +386,7 @@ begin
           TMonitor.Exit(ProcessLock);
         end;
       end
-    ).Resume;
+    ).Start;
   end;
 end;
 
