@@ -172,9 +172,9 @@ begin
   TMonitor.Enter(Self);
   try
     if v > 0 then
-      Weight := Weight + (1 - Weight) * 0.0001
+      Weight := Weight + (1 - Weight) * 0.001
     else if v < 0 then
-      Weight := Weight * 0.9999;
+      Weight := Weight * 0.999;
   finally
     TMonitor.Exit(Self);
   end;
