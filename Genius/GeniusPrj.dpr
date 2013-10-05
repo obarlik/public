@@ -3,7 +3,8 @@ program GeniusPrj;
 uses
   Vcl.Forms,
   uMain in 'uMain.pas' {frmMain},
-  uArtificialBrain in 'uArtificialBrain.pas';
+  uArtificialBrain in 'uArtificialBrain.pas',
+  uMatrix in 'uMatrix.pas';
 
 {$R *.res}
 
